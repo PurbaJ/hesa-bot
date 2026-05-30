@@ -76,10 +76,10 @@ function handleMessage(nomor, teks) {
   }
 
   // 4. Hubungi CS
-  if (lower === 'cs' || lower.includes('hubungi cs') || lower.includes('manusia')) {
-    s.csMode = true;
-    return '👋 Kamu sekarang terhubung dengan CS kami!\nSilakan sampaikan pertanyaan atau keluhanmu.\n\nKetik *menu* untuk kembali ke chatbot.';
-  }
+  // 4. Hubungi CS
+    if (lower === 'cs' || lower.includes('hubungi cs') || lower.includes('manusia')) {
+    return '👋 *Hubungi CS Warung HESA*\n\nSilakan chat langsung ke nomor CS kami:\n📱 *wa.me/6285830307719*\n\nJam operasional:\n🕗 08.00 - 21.00 WIB\n\nKetik *menu* untuk kembali ke chatbot.';
+    }
 
   // 5. Lihat keranjang
   if (lower === 'keranjang') {
