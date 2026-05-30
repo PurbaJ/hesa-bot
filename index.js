@@ -5,7 +5,6 @@ app.use(express.json());
 
 const FONNTE_TOKEN = '1DPpc12rDNNF4g95LfvT';
 
-// State percakapan per nomor HP
 const sessions = {};
 
 const MENU = [
@@ -54,26 +53,74 @@ function handleMessage(nomor, teks) {
   const s = sessions[nomor];
   const lower = teks.toLowerCase().trim();
 
+  // 1. Mode CS
   if (s.csMode) {
-    // Pesan diteruskan ke CS — bisa ditambah notif ke nomor CS
+    if (lower === 'menu') {
+      s.csMode = false;
+      s.step = 'main';
+      return `Kamu kembali ke chatbot HESA 😊\n\nBalas:\n1️⃣ *menu* - Lihat produk\n2️⃣ *pesan* - Langsung pesan\n3️⃣ *cs* - Hubungi CS`;
+    }
     return '✅ Pesanmu sudah kami catat. CS kami akan segera membalas!\n\nKetik *menu* untuk kembali ke chatbot.';
   }
 
-  if (lower === 'menu' || lower === 'halo' || lower === 'hai' || lower === 'hi' || lower === 'mulai') {
-    s.step = 'main'; s.csMode = false;
+  // 2. Sapaan / reset
+  if (lower === 'halo' || lower === 'hai' || lower === 'hi' || lower === 'mulai') {
+    s.step = 'main';
     return `Halo! Selamat datang di *Warung HESA* 🍌\n_Hemat, Enak, dan Selalu Ada!_\n\nBalas:\n1️⃣ *menu* - Lihat produk\n2️⃣ *pesan* - Langsung pesan\n3️⃣ *cs* - Hubungi CS`;
   }
 
-  if (lower === 'menu' || lower === 'lihat menu' || lower === 'produk') {
+  // 3. Lihat menu
+  if (lower === 'menu' || lower === 'lihat menu' || lower === 'produk' || lower === 'pesan') {
     s.step = 'menu';
     return buildMenuText();
   }
 
+  // 4. Hubungi CS
   if (lower === 'cs' || lower.includes('hubungi cs') || lower.includes('manusia')) {
     s.csMode = true;
-    return '👋 Kamu sekarang terhubung dengan CS kami!\nSilakan sampaikan pertanyaan atau keluhanmu.';
+    return '👋 Kamu sekarang terhubung dengan CS kami!\nSilakan sampaikan pertanyaan atau keluhanmu.\n\nKetik *menu* untuk kembali ke chatbot.';
   }
 
+  // 5. Lihat keranjang
+  if (lower === 'keranjang') {
+    if (!s.cart.length) return '🛒 Keranjangmu kosong. Ketik *menu* untuk melihat produk.';
+    return buildSummary(s.cart) + '\n\nKetik *bayar* untuk melanjutkan atau *tambah* untuk tambah produk.';
+  }
+
+  // 6. Lanjut bayar
+  if (lower === 'bayar' || lower === 'lanjut bayar') {
+    if (!s.cart.length) return '⚠️ Keranjangmu kosong! Ketik *menu* untuk melihat produk.';
+    s.step = 'payment';
+    return buildSummary(s.cart) + '\n\n💳 *Pilih metode pembayaran:*\n1. Transfer BRI\n2. Transfer BCA\n3. Dana\n4. OVO\n5. Tunai/COD';
+  }
+
+  // 7. Tambah produk lain
+  if (lower === 'tambah') {
+    s.step = 'menu';
+    return buildMenuText();
+  }
+
+  // 8. Input angka
+  const num = parseInt(teks);
+
+  // Jika step payment → angka = pilihan bayar
+  if (s.step === 'payment' && !isNaN(num)) {
+    const methods = {
+      1: { label: 'Transfer BRI', info: 'Bank BRI\nNo. Rek: 1234567890 a.n. Warung HESA' },
+      2: { label: 'Transfer BCA', info: 'Bank BCA\nNo. Rek: 0987654321 a.n. Warung HESA' },
+      3: { label: 'Dana',         info: 'Dana: 0812-3456-7890 a.n. Warung HESA' },
+      4: { label: 'OVO',          info: 'OVO: 0812-3456-7890 a.n. Warung HESA' },
+      5: { label: 'Tunai/COD',    info: 'Pembayaran tunai saat pesanan tiba' },
+    };
+    const chosen = methods[num];
+    if (chosen) {
+      s.cart = []; s.step = 'done';
+      return `✅ *Metode: ${chosen.label}*\n\n💳 *Info Pembayaran:*\n${chosen.info}\n\nSetelah bayar, kirim bukti ke CS kami 📸\n\nTerima kasih sudah memesan di Warung HESA! 🍌`;
+    }
+    return '⚠️ Pilih angka 1-5 untuk metode pembayaran.';
+  }
+
+  // 9. Jika menunggu jumlah porsi
   if (s.awaitQty) {
     const qty = parseInt(teks);
     if (isNaN(qty) || qty < 1) return '⚠️ Masukkan jumlah yang valid (minimal 1).';
@@ -84,43 +131,17 @@ function handleMessage(nomor, teks) {
     return `✅ *${item.name}* x${qty} ditambahkan!\n\nBalas:\n• *tambah* - Tambah produk lain\n• *bayar* - Lanjut pembayaran\n• *keranjang* - Lihat pesanan`;
   }
 
-  const num = parseInt(teks);
+  // 10. Pilih menu berdasarkan nomor
   if (!isNaN(num) && num >= 1 && num <= 6) {
     s.awaitQty = num;
     const item = MENU[num - 1];
     return `Kamu pilih: *${item.name}*\nHarga: ${fmt(item.price)}/porsi\n\nMau pesan berapa porsi?`;
   }
 
-  if (lower === 'keranjang') {
-    if (!s.cart.length) return '🛒 Keranjangmu kosong. Ketik *menu* untuk melihat produk.';
-    return buildSummary(s.cart) + '\n\nKetik *bayar* untuk melanjutkan.';
-  }
-
-  if (lower === 'bayar' || lower === 'lanjut bayar') {
-    if (!s.cart.length) return '⚠️ Keranjangmu kosong!';
-    s.step = 'payment';
-    return buildSummary(s.cart) + '\n\n💳 *Pilih metode pembayaran:*\n1. Transfer BRI\n2. Transfer BCA\n3. Dana\n4. OVO\n5. Tunai/COD';
-  }
-
-  if (s.step === 'payment') {
-    const methods = {
-      '1': 'BRI: 1234567890 a.n. Warung HESA',
-      '2': 'BCA: 0987654321 a.n. Warung HESA',
-      '3': 'Dana: 0812-3456-7890',
-      '4': 'OVO: 0812-3456-7890',
-      '5': 'Pembayaran tunai / COD'
-    };
-    if (methods[teks]) {
-      const info = methods[teks];
-      s.cart = []; s.step = 'done';
-      return `✅ *Informasi Pembayaran:*\n${info}\n\nSetelah bayar, kirim bukti ke CS kami ya! 📸\n\nTerima kasih sudah memesan di Warung HESA! 🍌`;
-    }
-  }
-
+  // 11. Tidak dikenali
   return '❓ Perintah tidak dikenali.\n\nKetik *menu* untuk mulai, atau *cs* untuk hubungi CS kami.';
 }
 
-// Endpoint yang dipanggil Fonnte saat ada pesan masuk
 app.post('/webhook', async (req, res) => {
   const { sender, message } = req.body;
   if (!sender || !message) return res.sendStatus(200);
